@@ -565,34 +565,34 @@ class CoreLMHeadModel(nn.Module):
             sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
             sorted_indices_to_remove[..., 0] = 0
             
-            # Create a mask for indices to remove
-            for i in range(batch_size):
-                indices_to_remove = sorted_indices[i][sorted_indices_to_remove[i]]
-                next_token_logits[i, indices_to_remove] = float('-inf')
-        
-                # Sample from the filtered distribution
-                if do_sample:
-                    # Use softmax to get probabilities
-                    probs = F.softmax(next_token_logits, dim=-1)
-                    # Sample from the distribution
-                    next_tokens = torch.multinomial(probs, num_samples=1)
-                else:
-                    # Greedy decoding
-                    next_tokens = torch.argmax(next_token_logits, dim=-1, keepdim=True)
-                
-                # Append new tokens to output
-                output_ids = torch.cat([output_ids, next_tokens], dim=-1)
-                
-                # Update attention mask to include the new token
-                attention_mask = torch.cat([
-                    attention_mask, 
-                    torch.ones((batch_size, 1), dtype=attention_mask.dtype, device=device)
-                ], dim=-1)
-                
-                # Check if all sequences have reached the end token (if provided)
-                if eos_token_id is not None:
-                    if (next_tokens == eos_token_id).all():
-                        break
+        # Create a mask for indices to remove
+        for i in range(batch_size):
+            indices_to_remove = sorted_indices[i][sorted_indices_to_remove[i]]
+            next_token_logits[i, indices_to_remove] = float('-inf')
+    
+            # Sample from the filtered distribution
+            if do_sample:
+                # Use softmax to get probabilities
+                probs = F.softmax(next_token_logits, dim=-1)
+                # Sample from the distribution
+                next_tokens = torch.multinomial(probs, num_samples=1)
+            else:
+                # Greedy decoding
+                next_tokens = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+            
+            # Append new tokens to output
+            output_ids = torch.cat([output_ids, next_tokens], dim=-1)
+            
+            # Update attention mask to include the new token
+            attention_mask = torch.cat([
+                attention_mask, 
+                torch.ones((batch_size, 1), dtype=attention_mask.dtype, device=device)
+            ], dim=-1)
+            
+            # Check if all sequences have reached the end token (if provided)
+            if eos_token_id is not None:
+                if (next_tokens == eos_token_id).all():
+                    break
 
         return output_ids
 

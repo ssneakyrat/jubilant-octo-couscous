@@ -283,6 +283,9 @@ class ModularContextInference:
         if generated_text.startswith(prompt):
             generated_text = generated_text[len(prompt):]
             
+        print(f"Raw generated output: {output_sequences}")
+        print(f"Decoded text before prompt removal: {generated_text}")
+
         return generated_text
         
     def chat(
