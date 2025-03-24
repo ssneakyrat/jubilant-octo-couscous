@@ -1,0 +1,58 @@
+# Modular Context-Specialized Network
+
+A lightweight, modular language model designed for short-term context understanding, trainable on consumer GPUs with 12GB VRAM.
+
+## Architecture
+
+- **Core Model (250M parameters)**: Lightweight transformer foundation
+- **Modular Design**: Specialized plug-in modules that can be trained independently
+- **Chat-Instruct Module**: Specialized for instruction following in conversational contexts
+
+## Key Features
+
+- Fast training time (2-3 days for core, 1-2 days per module)
+- Trainable on consumer GPUs (12GB VRAM)
+- PyTorch Lightning implementation
+- Flexible module loading for inference
+- TensorBoard logging
+- Checkpoint saving and resume training
+- Local dataset loading
+
+## Project Structure
+
+```
+modular-context-lm/
+├── config/
+│   └── default_config.yaml      # Default hyperparameters
+├── data/
+│   ├── dataset_schema.json      # Dataset format documentation
+│   └── sample_data/             # Sample training data
+├── logs/                        # TensorBoard logs
+├── model/
+│   ├── core.py                  # Core transformer model
+│   ├── modules/                 # Specialized modules
+│   │   ├── chat_instruct.py     # Chat instruction module
+│   │   └── module_base.py       # Base class for modules
+│   └── modeling_utils.py        # Shared modeling utilities
+├── checkpoints/                 # Model checkpoints
+├── training/
+│   ├── data_module.py           # PyTorch Lightning DataModule
+│   ├── trainer.py               # Training utilities
+│   └── metrics.py               # Evaluation metrics
+├── utils/
+│   ├── logging_utils.py         # Logging utilities
+│   └── tokenizer_utils.py       # Tokenization helpers
+├── train.py                     # Main training script
+├── inference.py                 # Inference script
+└── requirements.txt             # Project dependencies
+```
+
+## Training Times
+
+- Core Model: 2-3 days on RTX 3090
+- Chat-Instruct Module: 1-2 days on RTX 3090
+
+## Inference Performance
+
+- 40-60 tokens per second on RTX 3090
+- Memory footprint: 3-5GB VRAM (depending on active modules)
