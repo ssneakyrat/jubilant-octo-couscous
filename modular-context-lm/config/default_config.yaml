@@ -1,0 +1,139 @@
+# Configuration for Modular Context-Specialized Network
+
+# Model architecture configuration
+model:
+  # Core model parameters
+  core:
+    vocab_size: 50257  # GPT-2 vocabulary size
+    hidden_size: 768
+    num_hidden_layers: 12
+    num_attention_heads: 12
+    intermediate_size: 3072
+    hidden_dropout_prob: 0.1
+    attention_dropout_prob: 0.1
+    max_position_embeddings: 2048
+    initializer_range: 0.02
+    layer_norm_eps: 1.0e-12
+    use_cache: True
+    activation_function: "gelu_new"
+    tie_word_embeddings: True
+    gradient_checkpointing: True
+  
+  # Chat-Instruct module parameters
+  chat_instruct:
+    hidden_size: 768  # Must match core.hidden_size
+    num_hidden_layers: 4
+    num_attention_heads: 12
+    intermediate_size: 3072
+    hidden_dropout_prob: 0.1
+    attention_dropout_prob: 0.1
+    activation_function: "gelu_new"
+    layer_norm_eps: 1.0e-12
+    use_cross_attention: True
+    role_embeddings_size: 4  # for system, user, assistant, none
+    instruction_embeddings_size: 8  # for different instruction types
+
+# Training configuration
+training:
+  # Common parameters
+  seed: 42
+  precision: "bf16-mixed"  # Options: 32, 16, bf16, bf16-mixed
+  max_epochs: 10
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 8
+  val_check_interval: 0.25  # Validate every 25% of an epoch
+  log_every_n_steps: 50
+  
+  # Optimizer
+  optimizer:
+    name: "AdamW"
+    lr: 5.0e-5
+    weight_decay: 0.01
+    eps: 1.0e-8
+    beta1: 0.9
+    beta2: 0.999
+  
+  # Scheduler
+  scheduler:
+    name: "cosine"
+    warmup_steps: 1000
+    max_steps: 50000  # Will be recalculated based on data
+    num_cycles: 1
+    
+  # Core model specific training
+  core:
+    batch_size: 32
+    max_length: 1024
+    lr: 3.0e-5
+    weight_decay: 0.01
+    
+  # Chat-Instruct module specific training
+  chat_instruct:
+    batch_size: 16
+    max_length: 2048
+    lr: 5.0e-5
+    weight_decay: 0.01
+    freeze_core_layers: True  # Whether to freeze the core model when training
+    lr_core_multiplier: 0.1  # If not frozen, use this multiplier for core LR
+
+# Data configuration
+data:
+  train_path: "data/train/"
+  val_path: "data/val/"
+  test_path: "data/test/"
+  tokenizer_path: "gpt2"  # Use standard GPT-2 tokenizer or path to custom
+  max_seq_length: 2048
+  num_workers: 4
+  prefetch_factor: 2
+  shuffle_buffer_size: 10000
+  
+  # Core model data
+  core_data:
+    file_pattern: "*.jsonl"
+    text_key: "text"
+
+  # Chat-Instruct data
+  chat_instruct_data:
+    file_pattern: "*.jsonl"
+    input_key: "input"
+    response_key: "response"
+    role_key: "role"
+    instruction_key: "instruction_type"
+
+# Checkpoint configuration
+checkpoint:
+  dirpath: "checkpoints/"
+  filename: "{epoch:02d}-{val_loss:.2f}"
+  save_top_k: 3
+  monitor: "val_loss"
+  mode: "min"
+  auto_insert_metric_name: False
+  every_n_epochs: 1
+  save_last: True
+
+# Logging configuration
+logging:
+  logger: "tensorboard"  # "tensorboard" or "wandb"
+  log_dir: "logs/"
+  name: "modular-lm"
+  version: null  # Auto-increment
+  
+  # TensorBoard specific
+  tensorboard:
+    default_hp_metric: True
+    log_graph: True
+    
+  # Weights & Biases specific (if used)
+  wandb:
+    project: "modular-lm"
+    entity: null
+    tags: ["modular", "transformer", "chat-instruct"]
+
+# Inference configuration
+inference:
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  repetition_penalty: 1.1
+  max_new_tokens: 512
+  do_sample: True
