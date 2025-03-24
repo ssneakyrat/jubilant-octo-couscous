@@ -458,6 +458,144 @@ class CoreLMHeadModel(nn.Module):
         else:
             self.lm_head = new_embeddings
             
+    def generate(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        max_new_tokens=None,
+        do_sample=True,
+        temperature=1.0,
+        top_k=50,
+        top_p=1.0,
+        repetition_penalty=1.0,
+        pad_token_id=None,
+        eos_token_id=None,
+        use_cache=True,
+        **kwargs
+    ):      
+        
+        if input_ids is None:
+            raise ValueError("input_ids must be provided")
+        
+        batch_size, seq_length = input_ids.shape
+        device = input_ids.device
+    
+        # Set default values if not provided
+        if max_new_tokens is None:
+            max_new_tokens = 20
+    
+        # Set up padding token
+        if pad_token_id is None:
+            pad_token_id = 0  # Default padding token
+    
+        # Initialize past key values for faster generation
+        past_key_values = None
+    
+        # Create new attention mask if not provided
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+    
+        # Start with the input_ids
+        output_ids = input_ids.clone()
+    
+        # Generate tokens one at a time
+        for _ in range(max_new_tokens):
+            # Forward pass through model
+            with torch.no_grad():
+                if past_key_values is None:
+                    outputs = self(
+                        input_ids=output_ids,
+                        attention_mask=attention_mask,
+                        past_key_values=past_key_values,
+                        use_cache=True,
+                        return_dict=True,
+                        **kwargs
+                    )
+                else:
+                    # Only process the last token with cached key values
+                    outputs = self(
+                        input_ids=output_ids[:, -1].unsqueeze(-1),
+                        attention_mask=attention_mask,
+                        past_key_values=past_key_values,
+                        use_cache=True,
+                        return_dict=True,
+                        **kwargs
+                    )
+        
+        # Get logits for the next token
+        if isinstance(outputs, dict):
+            next_token_logits = outputs["logits"][:, -1, :]
+            past_key_values = outputs.get("past_key_values", None)
+        else:
+            next_token_logits = outputs[0][:, -1, :]
+            past_key_values = outputs[1] if len(outputs) > 1 else None
+        
+        # Apply repetition penalty
+        if repetition_penalty != 1.0:
+            for i in range(batch_size):
+                # Get the tokens that have been generated so far
+                prev_tokens = output_ids[i].tolist()
+                # Apply penalty to already seen tokens
+                for prev_token in set(prev_tokens):
+                    next_token_logits[i, prev_token] /= repetition_penalty
+        
+        # Apply temperature
+        if temperature != 1.0:
+            next_token_logits = next_token_logits / temperature
+        
+        # Apply top-k filtering
+        if top_k > 0:
+            # Get top-k indices
+            topk_values, topk_indices = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)), dim=-1)
+            # Zero out other values
+            next_token_logits = torch.full_like(next_token_logits, float('-inf'))
+            # Scatter top-k values back
+            next_token_logits.scatter_(-1, topk_indices, topk_values)
+        
+        # Apply top-p (nucleus) filtering
+        if top_p < 1.0:
+            # Sort the logits in descending order
+            sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True, dim=-1)
+            # Calculate cumulative probabilities
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+            
+            # Remove tokens with cumulative probability above the threshold
+            sorted_indices_to_remove = cumulative_probs > top_p
+            # Shift the indices to the right to keep the first token above threshold
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+            
+            # Create a mask for indices to remove
+            for i in range(batch_size):
+                indices_to_remove = sorted_indices[i][sorted_indices_to_remove[i]]
+                next_token_logits[i, indices_to_remove] = float('-inf')
+        
+                # Sample from the filtered distribution
+                if do_sample:
+                    # Use softmax to get probabilities
+                    probs = F.softmax(next_token_logits, dim=-1)
+                    # Sample from the distribution
+                    next_tokens = torch.multinomial(probs, num_samples=1)
+                else:
+                    # Greedy decoding
+                    next_tokens = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                
+                # Append new tokens to output
+                output_ids = torch.cat([output_ids, next_tokens], dim=-1)
+                
+                # Update attention mask to include the new token
+                attention_mask = torch.cat([
+                    attention_mask, 
+                    torch.ones((batch_size, 1), dtype=attention_mask.dtype, device=device)
+                ], dim=-1)
+                
+                # Check if all sequences have reached the end token (if provided)
+                if eos_token_id is not None:
+                    if (next_tokens == eos_token_id).all():
+                        break
+
+        return output_ids
+
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -527,3 +665,5 @@ class CoreLMHeadModel(nn.Module):
                 return (loss, lm_logits) + tuple(v for k, v in transformer_outputs.items() if k != "last_hidden_state")
             else:
                 return (lm_logits,) + tuple(v for k, v in transformer_outputs.items() if k != "last_hidden_state")
+            
+    
