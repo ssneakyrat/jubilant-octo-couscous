@@ -1,2 +1,3 @@
 *.pyc
 /modular-context-lm/logs
+/modular-context-lm/checkpoints

@@ -261,6 +261,10 @@ class ModularContextDataModule(pl.LightningDataModule):
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_path)
         
+        # Fix: Set padding token (using EOS token as pad token)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
         # Create datasets based on module type
         if self.module_type == "core":
             if stage == "fit" or stage is None:
